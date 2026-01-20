@@ -6,8 +6,6 @@ import { ProxyAgent } from 'undici';
 const CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
 const CLIENT_SECRET = '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';
 
-declare const fetch: any;
-
 const URLS = {
   TOKEN: 'https://oauth2.googleapis.com/token',
   USER_INFO: 'https://www.googleapis.com/oauth2/v2/userinfo',
@@ -19,6 +17,18 @@ const URLS = {
 // Internal API masquerading
 const USER_AGENT = 'antigravity/1.11.3 Darwin/arm64';
 const REDIRECT_URI = 'http://localhost:8888/oauth-callback';
+
+// Request timeout in milliseconds (30 seconds)
+const REQUEST_TIMEOUT_MS = 30000;
+
+/**
+ * Creates an AbortSignal that times out after the specified duration.
+ */
+function createTimeoutSignal(ms: number): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
 
 // --- Types ---
 
@@ -65,7 +75,7 @@ interface LoadProjectResponse {
 // --- Service Implementation ---
 
 export class GoogleAPIService {
-  private static getFetchOptions(): any {
+  private static getFetchOptions() {
     try {
       const config = ConfigManager.loadConfig();
       if (config.proxy?.upstream_proxy?.enabled && config.proxy.upstream_proxy.url) {
@@ -121,7 +131,17 @@ export class GoogleAPIService {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params,
+      signal: createTimeoutSignal(REQUEST_TIMEOUT_MS),
       ...this.getFetchOptions(),
+    }).catch((err: unknown) => {
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          throw new Error(
+            'Token exchange timed out. Please check your network connection and try again.',
+          );
+        }
+      }
+      throw err;
     });
 
     if (!response.ok) {
@@ -147,7 +167,17 @@ export class GoogleAPIService {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params,
+      signal: createTimeoutSignal(REQUEST_TIMEOUT_MS),
       ...this.getFetchOptions(),
+    }).catch((err: unknown) => {
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          throw new Error(
+            'Token refresh timed out. Please check your network connection and try again.',
+          );
+        }
+      }
+      throw err;
     });
 
     if (!response.ok) {
@@ -166,7 +196,17 @@ export class GoogleAPIService {
   static async getUserInfo(accessToken: string): Promise<UserInfo> {
     const response = await fetch(URLS.USER_INFO, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal: createTimeoutSignal(REQUEST_TIMEOUT_MS),
       ...this.getFetchOptions(),
+    }).catch((err: unknown) => {
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          throw new Error(
+            'User info request timed out. Please check your network connection and try again.',
+          );
+        }
+      }
+      throw err;
     });
 
     if (!response.ok) {
@@ -221,7 +261,7 @@ export class GoogleAPIService {
     const projectId = await this.fetchProjectId(accessToken);
 
     // 2. Build Payload
-    const payload: Record<string, any> = {};
+    const payload: Record<string, unknown> = {};
     if (projectId) {
       payload['project'] = projectId;
     }
@@ -285,11 +325,13 @@ export class GoogleAPIService {
         }
 
         return result;
-      } catch (e: any) {
-        console.warn(
-          `[GoogleAPIService] Request failed: ${e.message} (Attempt ${attempt}/${maxRetries})`,
-        );
-        lastError = e;
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          console.warn(
+            `[GoogleAPIService] Request failed: ${e.message} (Attempt ${attempt}/${maxRetries})`,
+          );
+        }
+        lastError = e instanceof Error ? e : new Error(String(e));
         if (attempt < maxRetries) {
           await new Promise((r) => setTimeout(r, 1000));
         }
