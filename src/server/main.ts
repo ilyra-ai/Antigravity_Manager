@@ -96,7 +96,7 @@ export async function getNestServerStatus(): Promise<{
     try {
       const tokenManager = app.get(TokenManagerService);
       activeAccounts = tokenManager.getAccountCount();
-    } catch (error: unknown) {
+    } catch {
       // TokenManager might not be available
     }
   }
