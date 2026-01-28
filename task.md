@@ -19,4 +19,4 @@
     - [x] Verificar integridade da localização PT-BR
 - [x] Persistência de Governança
     - [x] Salvar plan, task e rules na raiz do projeto
-- [ ] Verificação Final e Entrega [ ]
+- [x] Verificação Final e Entrega
