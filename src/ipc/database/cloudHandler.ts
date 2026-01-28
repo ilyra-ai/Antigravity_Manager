@@ -273,6 +273,16 @@ export class CloudAccountRepo {
     }
   }
 
+  static async updateAccountStatus(id: string, status: 'active' | 'rate_limited' | 'error' | 'refreshing'): Promise<void> {
+    const db = getDb();
+    try {
+      db.prepare('UPDATE accounts SET status = ? WHERE id = ?').run(status, id);
+      logger.info(`Updated account ${id} status to ${status}`);
+    } finally {
+      db.close();
+    }
+  }
+
   static async updateSelectedModels(id: string, models: string[]): Promise<void> {
     const db = getDb();
     try {

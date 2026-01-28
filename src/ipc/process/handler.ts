@@ -222,8 +222,17 @@ export async function closeAntigravity(): Promise<void> {
     // We use a more aggressive approach here but try to avoid killing ourselves
     const currentPid = process.pid;
 
+    // PhD Level: Process List Cache (2s) to prevent CPU spikes on rapid calls
+    let cachedProcessList: { pid: number; name: string; cmd: string }[] | null = null;
+    let lastFetchTime = 0;
+
     // Helper to list processes
     const getProcesses = (): { pid: number; name: string; cmd: string }[] => {
+      const now = Date.now();
+      if (cachedProcessList && now - lastFetchTime < 2000) {
+        return cachedProcessList;
+      }
+
       try {
         let output = '';
         if (platform === 'win32') {
@@ -243,7 +252,7 @@ export async function closeAntigravity(): Promise<void> {
                 encoding: 'utf-8',
                 maxBuffer: 1024 * 1024 * 10,
               });
-            } catch (innerE) {
+            } catch (e) {
               // Both failed, throw original or log? Throwing lets the outer catch handle it (returning empty list)
               throw e;
             }
@@ -310,6 +319,8 @@ export async function closeAntigravity(): Promise<void> {
             }
           }
         }
+        cachedProcessList = processList;
+        lastFetchTime = Date.now();
         return processList;
       } catch (e) {
         logger.error('Failed to list processes', e);

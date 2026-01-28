@@ -122,10 +122,35 @@ export async function decrypt(text: string): Promise<string> {
     let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
 
+    // PhD Level: Audit Log (Masked)
+    logger.debug(`Security: Decryption successful for payload length ${encryptedHex.length / 2}`);
+
     return decrypted;
   } catch (error) {
-    logger.error('Security: Decryption failed', error);
-    // If decryption fails, it might be corrupted or using a different key.
+    logger.error('Security: Decryption failed - possible key mismatch or corrupted data', error);
     throw error;
+  }
+}
+
+/**
+ * Validates the integrity of the security system.
+ */
+export async function validateSecurityIntegrity(): Promise<boolean> {
+  try {
+    const testPayload = 'Antigravity_Integrity_Check_' + Date.now();
+    const encrypted = await encrypt(testPayload);
+    const decrypted = await decrypt(encrypted);
+    const isValid = testPayload === decrypted;
+    
+    if (isValid) {
+      logger.info('Security: Integrity check passed.');
+    } else {
+      logger.error('Security: Integrity check failed - data mismatch.');
+    }
+    
+    return isValid;
+  } catch (error) {
+    logger.error('Security: Integrity check failed with error', error);
+    return false;
   }
 }

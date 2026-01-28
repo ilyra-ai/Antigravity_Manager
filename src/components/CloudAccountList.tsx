@@ -215,10 +215,12 @@ export function CloudAccountList() {
           <Button variant="outline" size="icon" onClick={handleForcePoll} disabled={forcePollMutation.isPending}>
             <RefreshCcw className={`h-4 w-4 ${forcePollMutation.isPending ? 'animate-spin' : ''}`} />
           </Button>
+{/* 
           <Button variant="outline" onClick={handleSyncLocalModels} disabled={syncLocalModelsMutation.isPending}>
             <Box className={`mr-2 h-4 w-4 ${syncLocalModelsMutation.isPending ? 'animate-pulse' : ''}`} />
             {t('cloud.syncLocalModels')}
           </Button>
+          */}
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />{t('cloud.addAccount')}</Button></DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">

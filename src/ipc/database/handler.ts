@@ -28,8 +28,61 @@ export function initDatabase(): void {
     const db = getDatabaseConnection();
     db.close();
     logger.info('Database initialized and verified (WAL mode)');
+    
+    // PhD Level: Start Periodic Snapshot System
+    startSnapshotRoutine();
   } catch (error) {
     logger.error('Failed to initialize database on startup', error);
+  }
+}
+
+/**
+ * PhD Level: Periodic Snapshot System
+ * Creates a backup of the database every 6 hours.
+ */
+let snapshotInterval: NodeJS.Timeout | null = null;
+
+export function startSnapshotRoutine() {
+  if (snapshotInterval) return;
+  
+  const SIX_HOURS = 1000 * 60 * 60 * 6;
+  snapshotInterval = setInterval(() => {
+    createSnapshot().catch(e => logger.error('Snapshot failed', e));
+  }, SIX_HOURS);
+
+  // Initial Snapshot
+  createSnapshot().catch(e => logger.error('Initial snapshot failed', e));
+}
+
+export async function createSnapshot() {
+  const dbPaths = getAntigravityDbPaths();
+  if (dbPaths.length === 0) return;
+
+  const mainDbPath = dbPaths[0];
+  const snapshotPath = `${mainDbPath}.snapshot.${Date.now()}`;
+  const dir = path.dirname(mainDbPath);
+  const snapshotsDir = path.join(dir, 'snapshots');
+
+  if (!fs.existsSync(snapshotsDir)) {
+    fs.mkdirSync(snapshotsDir, { recursive: true });
+  }
+
+  const db = getDatabaseConnection();
+  try {
+    logger.info(`Creating database snapshot: ${snapshotPath}`);
+    db.prepare(`VACUUM INTO ?`).run(path.join(snapshotsDir, path.basename(snapshotPath)));
+    
+    // PhD Level: Retention Policy (Keep last 5 snapshots)
+    const files = fs.readdirSync(snapshotsDir)
+      .filter(f => f.includes('.snapshot.'))
+      .sort((a, b) => fs.statSync(path.join(snapshotsDir, b)).mtimeMs - fs.statSync(path.join(snapshotsDir, a)).mtimeMs);
+
+    if (files.length > 5) {
+      files.slice(5).forEach(f => fs.unlinkSync(path.join(snapshotsDir, f)));
+      logger.info(`Cleaned up ${files.length - 5} old snapshots`);
+    }
+  } finally {
+    db.close();
   }
 }
 

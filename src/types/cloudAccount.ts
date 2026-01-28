@@ -31,7 +31,7 @@ export interface CloudAccount {
   quota?: CloudQuotaData;
   created_at: number;
   last_used: number; // Unix timestamp
-  status?: 'active' | 'rate_limited' | 'expired';
+  status?: 'active' | 'rate_limited' | 'expired' | 'error' | 'refreshing';
   is_active?: boolean;
   selected_models?: string[];
 }
@@ -68,7 +68,7 @@ export const CloudAccountSchema = z.object({
   quota: CloudQuotaDataSchema.optional(),
   created_at: z.number(),
   last_used: z.number(),
-  status: z.enum(['active', 'rate_limited', 'expired']).optional(),
+  status: z.enum(['active', 'rate_limited', 'expired', 'error', 'refreshing']).optional(),
   is_active: z.boolean().optional(),
   selected_models: z.array(z.string()).optional(),
 });

@@ -2,93 +2,82 @@ import { CloudAccountRepo } from '../ipc/database/cloudHandler';
 import { CloudAccount } from '../types/cloudAccount';
 import { switchCloudAccount } from '../ipc/cloud/handler';
 import { logger } from '../utils/logger';
+import { Notification } from 'electron';
 
 export class AutoSwitchService {
+  private static HYSTERESIS_THRESHOLD = 5; // 5% guard zone
+
   /**
-   * Finds the best cloud account to switch to.
-   * Criteria:
-   * 1. Not the current account (unless it's the only one).
-   * 2. Status is 'active'.
-   * 3. Has quota > 5% for all models (or at least gemini-pro).
-   * 4. Sorted by highest quota then last_used (least recently used preferred for rotation? or most? Let's say highest quota first).
+   * PhD Level: Health Score Heuristic
+   * Calculates a score from 0 to 100 based on:
+   * - Quota availability (60%)
+   * - Status stability (40%)
+   * Latency and Error history can be added as we track them.
    */
-  static async findBestAccount(currentAccountId: string): Promise<CloudAccount | null> {
-    const accounts = await CloudAccountRepo.getAccounts();
+  private static calculateHealthScore(account: CloudAccount): number {
+    if (!account.quota) return 0;
+    if (account.status === 'rate_limited' || account.status === 'error') return 0;
 
-    // Filter potential candidates
-    const candidates = accounts.filter((acc) => {
-      if (acc.id === currentAccountId) return false;
-      if (acc.status !== 'active') return false; // Rate limited or expired accounts are skipped
+    const models = Object.values(account.quota.models);
+    if (models.length === 0) return 0;
 
-      // Check quota
-      // We assume simple check: if any model has < 5%, we skip it.
-      // Or better: check average? NO, check critical models.
-      // For now, let's just check if quota object exists.
-      if (!acc.quota) return false; // No quota data means risky
+    const avgQuota = models.reduce((acc, m) => acc + m.percentage, 0) / models.length;
+    
+    // Base Score from Quota (0-60 points)
+    let score = (avgQuota / 100) * 60;
 
-      const models = Object.values(acc.quota.models);
-      // If any model is depleted (< 5%), skip.
-      const isDepleted = models.some((m) => m.percentage < 5);
-      return !isDepleted;
-    });
+    // Reliability Bonus (0-40 points)
+    if (account.status === 'active') score += 40;
+    if (account.status === 'refreshing') score += 20;
 
-    if (candidates.length === 0) return null;
-
-    // Sort by "Best"
-    // Heuristic: Highest average quota availability
-    candidates.sort((a, b) => {
-      const avgA = this.calculateAverageQuota(a);
-      const avgB = this.calculateAverageQuota(b);
-      return avgB - avgA; // Descending
-    });
-
-    return candidates[0];
+    return Math.min(100, Math.max(0, score));
   }
 
-  private static calculateAverageQuota(account: CloudAccount): number {
-    if (!account.quota) return 0;
-    const values = Object.values(account.quota.models).map((m) => m.percentage);
-    if (values.length === 0) return 0;
-    const sum = values.reduce((a, b) => a + b, 0);
-    return sum / values.length;
+  /**
+   * Finds the best cloud account to switch to.
+   */
+  static async findBestAccount(currentAccountId: string, currentScore: number): Promise<CloudAccount | null> {
+    const accounts = await CloudAccountRepo.getAccounts();
+
+    const candidates = accounts
+      .filter((acc) => acc.id !== currentAccountId && acc.status === 'active')
+      .map((acc) => ({
+        account: acc,
+        score: this.calculateHealthScore(acc),
+      }))
+      .filter((c) => c.score > currentScore + this.HYSTERESIS_THRESHOLD) // PhD Level: Hysteresis
+      .sort((a, b) => b.score - a.score);
+
+    return candidates.length > 0 ? candidates[0].account : null;
   }
 
   /**
    * Triggered by Monitor Service or UI.
-   * Checks if we need to switch from the current account.
    */
   static async checkAndSwitchIfNeeded(): Promise<boolean> {
     const enabled = CloudAccountRepo.getSetting<boolean>('auto_switch_enabled', false);
     if (!enabled) return false;
 
-    // Get current active account
     const accounts = await CloudAccountRepo.getAccounts();
     const currentAccount = accounts.find((a) => a.is_active);
 
-    // If no active account, maybe we should pick one?
-    // For now, assume user manually picked first one.
     if (!currentAccount) return false;
 
-    // Check if current is depleted
-    const isDepleted = this.isAccountDepleted(currentAccount);
+    const currentScore = this.calculateHealthScore(currentAccount);
+    const isCritical = currentScore < 10 || currentAccount.status === 'rate_limited' || currentAccount.status === 'error';
 
-    if (isDepleted || currentAccount.status === 'rate_limited') {
-      logger.info(
-        `AutoSwitch: Current account ${currentAccount.email} is depleted or rate limited.`,
-      );
+    if (isCritical) {
+      logger.info(`AutoSwitch: Current account ${currentAccount.email} health is critical (${Math.round(currentScore)}%). Searching for replacement...`);
 
-      const nextAccount = await this.findBestAccount(currentAccount.id);
+      const nextAccount = await this.findBestAccount(currentAccount.id, currentScore);
       if (nextAccount) {
-        logger.info(`AutoSwitch: Switching to ${nextAccount.email}...`);
-
-        // Notify user (via toast? we are in main process... IPC event?)
-        // Ideally we send an IPC event to renderer.
-        // For now, logic first.
+        const nextScore = this.calculateHealthScore(nextAccount);
+        logger.info(`AutoSwitch: Switching to ${nextAccount.email} (Score: ${Math.round(nextScore)}%)`);
 
         await switchCloudAccount(nextAccount.id);
 
-        // We might want to send a notification to user desktop?
-        // require('electron').Notification ...
+        // PhD Level: Contextual System Notification
+        this.notifySwitch(currentAccount, nextAccount, currentScore);
 
         return true;
       } else {
@@ -99,10 +88,24 @@ export class AutoSwitchService {
     return false;
   }
 
+  private static notifySwitch(oldAcc: CloudAccount, newAcc: CloudAccount, oldScore: number) {
+    try {
+      const reason = oldAcc.status === 'rate_limited' ? 'Rate Limit detectado' : `Saúde baixa (${Math.round(oldScore)}%)`;
+      
+      new Notification({
+        title: 'Antigravity: Chaveamento Automático',
+        body: `Origem: ${oldAcc.email}\nDestino: ${newAcc.email}\nMotivo: ${reason}`,
+        silent: false,
+      }).show();
+    } catch (e) {
+      logger.error('Failed to show system notification', e);
+    }
+  }
+
   static isAccountDepleted(account: CloudAccount): boolean {
-    if (!account.quota) return false; // Unknown, assume fine or let fetchQuota find out
-    // Threshold = 5%
+    if (!account.quota) return false;
     const THRESHOLD = 5;
     return Object.values(account.quota.models).some((m) => m.percentage < THRESHOLD);
   }
 }
+

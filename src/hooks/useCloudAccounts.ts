@@ -15,7 +15,10 @@ export function useCloudAccounts() {
   return useQuery<CloudAccount[]>({
     queryKey: QUERY_KEYS.cloudAccounts,
     queryFn: listCloudAccounts,
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 1000 * 60 * 5, // 5 minutes (PhD Level Cache)
+    gcTime: 1000 * 60 * 30, // 30 minutes
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 

@@ -37,15 +37,19 @@ describe('Security Regression Tests', () => {
     // Setup the mock application
     appMock = {
       enableCors: vi.fn(),
+      useGlobalFilters: vi.fn(),
+      useGlobalInterceptors: vi.fn(),
       listen: vi.fn().mockResolvedValue(true),
       get: vi.fn(),
-      close: vi.fn(),
+      close: vi.fn().mockResolvedValue(true),
     };
     
     (NestFactory.create as any).mockResolvedValue(appMock);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const { stopNestServer } = await import('../../server/main');
+    await stopNestServer();
     vi.restoreAllMocks();
   });
 

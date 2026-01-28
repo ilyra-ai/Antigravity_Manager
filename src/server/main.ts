@@ -4,6 +4,8 @@ import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify
 import { AppModule } from './app.module';
 import { logger } from '../utils/logger';
 import { TokenManagerService } from './modules/proxy/token-manager.service';
+import { GlobalHttpExceptionFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 import { ProxyConfig } from '../types/config';
 import { setServerConfig } from './server-config';
@@ -27,6 +29,10 @@ export async function bootstrapNestServer(config: any): Promise<boolean> {
 
     // Enable CORS
     app.enableCors();
+
+    // Global Filters & Interceptors (PhD Level)
+    app.useGlobalFilters(new GlobalHttpExceptionFilter());
+    app.useGlobalInterceptors(new LoggingInterceptor());
 
     await app.listen(port, '127.0.0.1');
     currentPort = port;
