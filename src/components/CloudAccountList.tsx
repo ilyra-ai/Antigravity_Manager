@@ -7,12 +7,9 @@ import {
   useAutoSwitchEnabled,
   useSetAutoSwitchEnabled,
   useForcePollCloudMonitor,
-  useSyncLocalAccount,
-  useSyncLocalModels,
   startAuthFlow,
 } from '@/hooks/useCloudAccounts';
 import { CloudAccountCard } from '@/components/CloudAccountCard';
-import { CloudAccount } from '@/types/cloudAccount';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 
@@ -22,18 +19,12 @@ import {
   Cloud,
   Zap,
   RefreshCcw,
-  Download,
   CheckSquare,
-  Trash2,
-  X,
-  RefreshCw,
-  Box,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -41,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedErrorMessage } from '@/utils/errorMessages';
 
@@ -52,8 +43,6 @@ export function CloudAccountList() {
   const deleteMutation = useDeleteCloudAccount();
   const addMutation = useAddGoogleAccount();
   const switchMutation = useSwitchCloudAccount();
-  const syncMutation = useSyncLocalAccount();
-  const syncLocalModelsMutation = useSyncLocalModels();
 
   const { data: autoSwitchEnabled, isLoading: isSettingsLoading } = useAutoSwitchEnabled();
   const setAutoSwitchMutation = useSetAutoSwitchEnabled();
@@ -64,7 +53,7 @@ export function CloudAccountList() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [authCode, setAuthCode] = useState('');
 
-  const handleAddAccount = (codeVal?: string) => {
+  const handleAddAccount = useCallback((codeVal?: string) => {
     const codeToUse = codeVal || authCode;
     if (!codeToUse) return;
     addMutation.mutate({ authCode: codeToUse }, {
@@ -81,7 +70,7 @@ export function CloudAccountList() {
         });
       },
     });
-  };
+  }, [authCode, addMutation, setIsAddDialogOpen, setAuthCode, toast, t]);
 
   useEffect(() => {
     if (window.electron?.onGoogleAuthCode) {
@@ -96,7 +85,7 @@ export function CloudAccountList() {
     if (authCode && isAddDialogOpen && !addMutation.isPending) {
       handleAddAccount(authCode);
     }
-  }, [authCode, isAddDialogOpen]);
+  }, [authCode, isAddDialogOpen, addMutation.isPending, handleAddAccount]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -141,24 +130,6 @@ export function CloudAccountList() {
     forcePollMutation.mutate(undefined, { onSuccess: () => toast({ title: t('cloud.polling') }) });
   };
 
-  const handleSyncLocalModels = () => {
-    syncLocalModelsMutation.mutate(undefined, {
-      onSuccess: (count) => {
-        toast({
-          title: t('cloud.toast.syncLocalModelsSuccess.title'),
-          description: t('cloud.toast.syncLocalModelsSuccess.description', { count }),
-        });
-      },
-      onError: (err) => {
-        toast({
-          title: t('cloud.toast.syncFailed.title'),
-          description: getLocalizedErrorMessage(err, t),
-          variant: 'destructive',
-        });
-      },
-    });
-  };
-
   const openAuthUrl = async () => {
     try { await startAuthFlow(); } catch (e) {
       toast({ title: t('cloud.toast.startAuthFailed'), description: String(e), variant: 'destructive' });
@@ -176,20 +147,6 @@ export function CloudAccountList() {
   const toggleSelectAll = () => {
     if (selectedIds.size === accounts?.length) setSelectedIds(new Set());
     else setSelectedIds(new Set(accounts?.map((a) => a.id) || []));
-  };
-
-  const handleBatchRefresh = () => {
-    selectedIds.forEach((id) => refreshMutation.mutate({ accountId: id }));
-    toast({ title: t('cloud.toast.quotaRefreshed'), description: `triggered for ${selectedIds.size} accounts.` });
-    setSelectedIds(new Set());
-  };
-
-  const handleBatchDelete = () => {
-    if (confirm(t('cloud.batch.confirmDelete', { count: selectedIds.size }))) {
-      selectedIds.forEach((id) => deleteMutation.mutate({ accountId: id }));
-      toast({ title: t('cloud.toast.deleted'), description: `${selectedIds.size} accounts deleted.` });
-      setSelectedIds(new Set());
-    }
   };
 
   if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
@@ -215,12 +172,6 @@ export function CloudAccountList() {
           <Button variant="outline" size="icon" onClick={handleForcePoll} disabled={forcePollMutation.isPending}>
             <RefreshCcw className={`h-4 w-4 ${forcePollMutation.isPending ? 'animate-spin' : ''}`} />
           </Button>
-{/* 
-          <Button variant="outline" onClick={handleSyncLocalModels} disabled={syncLocalModelsMutation.isPending}>
-            <Box className={`mr-2 h-4 w-4 ${syncLocalModelsMutation.isPending ? 'animate-pulse' : ''}`} />
-            {t('cloud.syncLocalModels')}
-          </Button>
-          */}
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />{t('cloud.addAccount')}</Button></DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">

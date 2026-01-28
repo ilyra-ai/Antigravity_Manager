@@ -145,7 +145,7 @@ export async function withRetry<T>(
   task: () => Promise<T>,
   options: RetryOptions = { maxAttempts: 3, baseDelay: 1000, jitter: true }
 ): Promise<T> {
-  let lastError: any;
+  let lastError: unknown;
   for (let attempt = 0; attempt < options.maxAttempts; attempt++) {
     try {
       return await task();
