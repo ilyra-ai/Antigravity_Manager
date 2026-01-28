@@ -18,10 +18,27 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 
-import { MoreVertical, Trash, RefreshCw, Box, Power } from 'lucide-react';
+import {
+  MoreVertical,
+  Trash,
+  RefreshCw,
+  Box,
+  Power,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { useTranslation } from 'react-i18next';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ModelSelector } from './ModelSelector';
+import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useState } from 'react';
 
 interface CloudAccountCardProps {
   account: CloudAccount;
@@ -50,10 +67,12 @@ export function CloudAccountCard({
 
   // Helpers to get quota color
   const getQuotaColor = (percentage: number) => {
-    if (percentage > 80) return 'text-green-500';
-    if (percentage > 20) return 'text-yellow-500';
-    return 'text-red-500';
+    if (percentage > 70) return 'bg-green-500';
+    if (percentage > 30) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
+
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
   const modelQuotas = Object.entries(account.quota?.models || {});
 
@@ -109,6 +128,11 @@ export function CloudAccountCard({
             <DropdownMenuItem onClick={() => onRefresh(account.id)} disabled={isRefreshing}>
               <RefreshCw className="mr-2 h-4 w-4" />
               {t('cloud.card.refresh')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setIsSelectorOpen(true)}>
+              <Box className="mr-2 h-4 w-4" />
+              {t('cloud.card.selectModels', 'Configurar Modelos')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -168,19 +192,34 @@ export function CloudAccountCard({
 
         <div className="space-y-2">
           {modelQuotas.length > 0 ? (
-            modelQuotas.map(([modelName, info]) => (
-              <div key={modelName} className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground max-w-[120px] truncate" title={modelName}>
-                  {modelName.replace('models/', '')}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className={`font-mono font-bold ${getQuotaColor(info.percentage)}`}>
-                    {info.percentage}%
-                  </span>
-                  <span className="text-muted-foreground text-xs">{t('cloud.card.left')}</span>
+            <div className="space-y-2">
+              {modelQuotas.map(([modelName, info]: [string, any]) => (
+                <div key={modelName} className="space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tight">
+                    <div className="flex flex-col truncate max-w-[170px]">
+                      <span className="text-secondary-foreground truncate" title={modelName}>
+                        {info.displayName || modelName}
+                      </span>
+                      {info.maxTokenAllowed && (
+                        <span className="text-[8px] opacity-50">
+                          {info.maxTokenAllowed >= 1000000 
+                            ? `${Math.floor(info.maxTokenAllowed / 1000000)}M context`
+                            : `${Math.floor(info.maxTokenAllowed / 1000)}k context`}
+                        </span>
+                      )}
+                    </div>
+                    <span className={info.percentage > 30 ? 'text-primary' : 'text-destructive'}>
+                      {info.percentage}%
+                    </span>
+                  </div>
+                  <Progress 
+                    value={info.percentage} 
+                    className="h-1 bg-muted/20" 
+                    indicatorClassName={getQuotaColor(info.percentage)} 
+                  />
                 </div>
-              </div>
-            ))
+              ))}
+            </div>
           ) : (
             <div className="text-muted-foreground flex flex-col items-center justify-center py-4">
               <Box className="mb-2 h-8 w-8 opacity-20" />
@@ -195,6 +234,25 @@ export function CloudAccountCard({
           {t('cloud.card.used')}{' '}
           {formatDistanceToNow(account.last_used * 1000, { addSuffix: true })}
         </span>
+        {account.selected_models && account.selected_models.length > 0 && (
+          <Badge variant="outline" className="text-[9px] h-4 font-black bg-primary/5">
+             {account.selected_models.length} MODELOS ATIVOS
+          </Badge>
+        )}
+
+        <Dialog open={isSelectorOpen} onOpenChange={setIsSelectorOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="font-black uppercase tracking-tighter">
+                 {t('cloud.selector.title', 'Inteligência Industrial')}
+              </DialogTitle>
+              <DialogDescription className="text-xs uppercase font-bold opacity-50">
+                 {t('cloud.selector.description', 'Selecione os modelos que este hardware irá processar.')}
+              </DialogDescription>
+            </DialogHeader>
+            <ModelSelector account={account} onClose={() => setIsSelectorOpen(false)} />
+          </DialogContent>
+        </Dialog>
       </CardFooter>
     </Card>
   );

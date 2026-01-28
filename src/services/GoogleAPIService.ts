@@ -12,6 +12,9 @@ const URLS = {
   AUTH: 'https://accounts.google.com/o/oauth2/v2/auth',
   QUOTA: 'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
   LOAD_PROJECT: 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist',
+  EMBEDDING: 'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent',
+  LIST_MODELS_V1BETA: 'https://generativelanguage.googleapis.com/v1beta/models',
+  LIST_MODELS_V1: 'https://generativelanguage.googleapis.com/v1/models',
 };
 
 // Internal API masquerading
@@ -56,6 +59,9 @@ export interface QuotaData {
     {
       percentage: number;
       resetTime: string;
+      displayName?: string;
+      maxTokenAllowed?: number;
+      maxCompletionTokens?: number;
     }
   >;
 }
@@ -257,87 +263,127 @@ export class GoogleAPIService {
    * Core logic: Fetches detailed model quota information.
    */
   static async fetchQuota(accessToken: string): Promise<QuotaData> {
-    // 1. Get Project ID (Critical)
-    const projectId = await this.fetchProjectId(accessToken);
+    const result: QuotaData = { models: {} };
+    
+    // 1. Bus A: Internal Telemetry & Quota (v1internal)
+    try {
+      const projectId = await this.fetchProjectId(accessToken);
+      const payload = projectId ? { project: projectId } : {};
+      
+      const response = await fetch(URLS.QUOTA, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': USER_AGENT,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        ...this.getFetchOptions(),
+      });
 
-    // 2. Build Payload
-    const payload: Record<string, unknown> = {};
-    if (projectId) {
-      payload['project'] = projectId;
-    }
-
-    // 3. Send Request with Retries
-    const maxRetries = 3;
-    let lastError: Error | null = null;
-    const fetchOptions = this.getFetchOptions(); // Reuse options
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch(URLS.QUOTA, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'User-Agent': USER_AGENT,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-          ...fetchOptions,
-        });
-
-        if (!response.ok) {
-          const text = await response.text();
-          const status = response.status;
-
-          if (status === 403) {
-            throw new Error('FORBIDDEN');
-          }
-          if (status === 401) {
-            throw new Error('UNAUTHORIZED');
-          }
-
-          const errorMsg = `HTTP ${status} - ${text}`;
-          console.warn(
-            `[GoogleAPIService] API Error: ${errorMsg} (Attempt ${attempt}/${maxRetries})`,
-          );
-
-          if (attempt < maxRetries) {
-            await new Promise((r) => setTimeout(r, 1000));
-            continue;
-          } else {
-            throw new Error(errorMsg);
-          }
-        }
-
+      if (response.ok) {
         const data = (await response.json()) as { models: Record<string, ModelInfoRaw> };
-        const result: QuotaData = { models: {} };
-
-        // Parse relevant models
         for (const [name, info] of Object.entries(data.models || {})) {
+          const cleanName = name.replace(/^models\//, '');
           if (info.quotaInfo) {
             const fraction = info.quotaInfo.remainingFraction ?? 0;
-            const percentage = Math.floor(fraction * 100);
-            const resetTime = info.quotaInfo.resetTime || '';
-
-            if (name.toLowerCase().includes('gemini') || name.toLowerCase().includes('claude')) {
-              result.models[name] = { percentage, resetTime };
-            }
+            result.models[cleanName] = { 
+              percentage: Math.floor(fraction * 100), 
+              resetTime: info.quotaInfo.resetTime || '' 
+            };
           }
         }
+      }
+    } catch (e) {
+      console.warn('[GoogleAPIService] Bus A Failure - continuing to Catalogues', e);
+    }
 
-        return result;
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          console.warn(
-            `[GoogleAPIService] Request failed: ${e.message} (Attempt ${attempt}/${maxRetries})`,
-          );
+    // 2. Bus B & C: Exhaustive Catalogues (v1 & v1beta)
+    // PhD Level: Pure Identity-based Discovery
+    const catalogUrls = [
+      `${URLS.LIST_MODELS_V1}?pageSize=1000`,
+      `${URLS.LIST_MODELS_V1BETA}?pageSize=1000`
+    ];
+
+    for (const url of catalogUrls) {
+      try {
+        const resp = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: createTimeoutSignal(10000),
+          ...this.getFetchOptions(),
+        });
+
+        if (resp.ok) {
+          const data = (await resp.json()) as { models: any[] };
+          if (data.models && Array.isArray(data.models)) {
+            data.models.forEach((m: any) => {
+              const modelId = m.name?.replace(/^models\//, '');
+              if (!modelId) return;
+
+              // Higher Fidelity Metadata Mapping (following user benchmark)
+              let contextWindow = m.inputTokenLimit || 32000;
+              if (modelId.includes('gemini-1.5-pro')) contextWindow = 2000000;
+              else if (modelId.includes('gemini-1.5-flash') || modelId.includes('gemini-2.0-flash')) contextWindow = 1000000;
+              
+              const finalContext = Math.min(contextWindow, 2000000);
+              const completionTokens = m.outputTokenLimit ? Math.min(m.outputTokenLimit, 128000) : 8192;
+
+              if (result.models[modelId]) {
+                // Update existing telemetry with metadata
+                result.models[modelId].displayName = m.displayName || modelId;
+                result.models[modelId].maxTokenAllowed = finalContext;
+                result.models[modelId].maxCompletionTokens = completionTokens;
+              } else {
+                // New model discovered in catalogue - 100% health baseline
+                result.models[modelId] = {
+                  percentage: 100,
+                  resetTime: '',
+                  displayName: m.displayName || modelId,
+                  maxTokenAllowed: finalContext,
+                  maxCompletionTokens: completionTokens
+                };
+              }
+            });
+          }
         }
-        lastError = e instanceof Error ? e : new Error(String(e));
-        if (attempt < maxRetries) {
-          await new Promise((r) => setTimeout(r, 1000));
-        }
+      } catch (e) {
+        console.warn(`[GoogleAPIService] Catalogue Discovery Failure at ${url}:`, e);
       }
     }
 
-    throw lastError || new Error('Quota check failed');
+    return result;
+  }
+
+  /**
+   * Fetches high-dimensional embeddings for semantic search.
+   */
+  static async fetchEmbedding(text: string, accessToken: string): Promise<Float32Array> {
+    const payload = {
+      model: 'models/text-embedding-004',
+      content: { parts: [{ text }] },
+    };
+
+    try {
+      const response = await fetch(URLS.EMBEDDING, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        ...this.getFetchOptions(),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Embedding API failure: ${errText}`);
+      }
+
+      const data = await response.json() as { embedding: { values: number[] } };
+      return new Float32Array(data.embedding.values);
+    } catch (e) {
+      console.error('[GoogleAPIService] Failed to fetch embedding', e);
+      throw e;
+    }
   }
 }

@@ -114,5 +114,27 @@ export function useSyncLocalAccount() {
   });
 }
 
-import { startAuthFlow } from '@/actions/cloud';
+import { startAuthFlow, syncLocalModels } from '@/actions/cloud';
 export { startAuthFlow };
+
+export function useSyncLocalModels() {
+  const queryClient = useQueryClient();
+  return useMutation<number, Error, void>({
+    mutationFn: syncLocalModels,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cloudAccounts });
+    },
+  });
+}
+
+import { updateSelectedModels } from '@/actions/cloud';
+
+export function useUpdateSelectedModels() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateSelectedModels,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cloudAccounts });
+    },
+  });
+}

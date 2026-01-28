@@ -32,6 +32,7 @@ export class ConfigManager {
         ...DEFAULT_APP_CONFIG,
         ...raw,
         proxy: { ...DEFAULT_APP_CONFIG.proxy, ...(raw.proxy || {}) },
+        local_ai: { ...DEFAULT_APP_CONFIG.local_ai, ...(raw.local_ai || {}) }
       };
 
       // Fix deep merge for upstream_proxy if needed

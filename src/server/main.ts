@@ -11,7 +11,7 @@ import { setServerConfig } from './server-config';
 let app: NestFastifyApplication | null = null;
 let currentPort: number = 0;
 
-export async function bootstrapNestServer(config: ProxyConfig): Promise<boolean> {
+export async function bootstrapNestServer(config: any): Promise<boolean> {
   const port = config.port || 8045;
   if (app) {
     logger.info('NestJS server already running.');
@@ -28,11 +28,11 @@ export async function bootstrapNestServer(config: ProxyConfig): Promise<boolean>
     // Enable CORS
     app.enableCors();
 
-    await app.listen(port, '0.0.0.0');
+    await app.listen(port, '127.0.0.1');
     currentPort = port;
     logger.info(`NestJS Proxy Server running on http://localhost:${port}`);
     return true;
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to start NestJS server', error);
     return false;
   }

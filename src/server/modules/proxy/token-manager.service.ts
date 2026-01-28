@@ -6,12 +6,14 @@ import { GoogleAPIService } from '../../../services/GoogleAPIService';
 interface TokenData {
   email: string;
   account_id: string;
+  provider: string; // New field
   access_token: string;
   refresh_token: string;
   expires_in: number;
   expiry_timestamp: number;
   project_id?: string;
   session_id?: string;
+  selected_models?: string[];
 }
 
 @Injectable()
@@ -55,12 +57,14 @@ export class TokenManagerService implements OnModuleInit {
     return {
       account_id: account.id,
       email: account.email,
+      provider: account.provider,
       access_token: account.token.access_token,
       refresh_token: account.token.refresh_token,
       expires_in: account.token.expires_in,
       expiry_timestamp: account.token.expiry_timestamp,
       project_id: account.token.project_id || undefined,
       session_id: account.token.session_id || this.generateSessionId(),
+      selected_models: account.selected_models,
     };
   }
 
@@ -72,7 +76,7 @@ export class TokenManagerService implements OnModuleInit {
     return (-(min + rand)).toString();
   }
 
-  async getNextToken(): Promise<CloudAccount | null> {
+  async getNextToken(requestedModel?: string): Promise<CloudAccount | null> {
     try {
       // Reload if empty
       if (this.tokens.size === 0) {
@@ -83,10 +87,23 @@ export class TokenManagerService implements OnModuleInit {
       const now = Date.now();
       const nowSeconds = Math.floor(now / 1000);
 
-      // Filter out accounts in cooldown
-      const validTokens = Array.from(this.tokens.entries()).filter(([email, _]) => {
-        const cooldownUntil = this.cooldowns.get(email);
-        return !cooldownUntil || cooldownUntil <= now;
+      // Filter out accounts in cooldown AND those that don't satisfy model selection (if requested)
+      const validTokens = Array.from(this.tokens.entries()).filter(([accountId, data]) => {
+        const cooldownUntil = this.cooldowns.get(data.email);
+        const isNotCooldown = !cooldownUntil || cooldownUntil <= now;
+        
+        // PhD Level: Selective Model Routing Logic
+        // If the user has selected specific models for this account, we MUST respect it.
+        // If requestedModel is null (e.g. status check), we skip this filter.
+        let isModelAllowed = true;
+        if (requestedModel && data.selected_models && data.selected_models.length > 0) {
+            const cleanRequested = requestedModel.replace(/^models\//, '').toLowerCase();
+            isModelAllowed = data.selected_models.some((sm: string) => 
+                sm.replace(/^models\//, '').toLowerCase() === cleanRequested
+            );
+        }
+
+        return isNotCooldown && isModelAllowed;
       });
 
       if (validTokens.length === 0) {
@@ -94,9 +111,29 @@ export class TokenManagerService implements OnModuleInit {
         return null;
       }
 
-      // Round robin selection
-      const [accountId, tokenData] = validTokens[this.currentIndex % validTokens.length];
-      this.currentIndex++;
+      // Selection Logic (PhD Level: Priority to Active Local Account)
+      const accountsInDb = await CloudAccountRepo.getAccounts();
+      const activeAccount = accountsInDb.find(a => a.is_active);
+      
+      let accountId: string;
+      let tokenData: TokenData;
+
+      if (activeAccount && activeAccount.provider.startsWith('local-')) {
+          // If a local model is active, LOCK session to it (High Fidelity Sovereignty)
+          const localToken = this.tokens.get(activeAccount.id);
+          if (localToken) {
+              accountId = activeAccount.id;
+              tokenData = localToken;
+              this.logger.log(`Session LOCK: Active Local Model [${tokenData.email}] takes precedence.`);
+          } else {
+              [accountId, tokenData] = validTokens[this.currentIndex % validTokens.length];
+              this.currentIndex++;
+          }
+      } else {
+          // Standard Round Robin for cloud accounts
+          [accountId, tokenData] = validTokens[this.currentIndex % validTokens.length];
+          this.currentIndex++;
+      }
 
       // Check if token needs refresh (expires in < 5 minutes)
       if (nowSeconds >= tokenData.expiry_timestamp - 300) {
@@ -119,11 +156,22 @@ export class TokenManagerService implements OnModuleInit {
         }
       }
 
-      // Resolve project ID if missing (mock for now, like original)
-      if (!tokenData.project_id) {
-        const mockId = `cloud-code-${Math.floor(Math.random() * 100000)}`;
-        tokenData.project_id = mockId;
-        await this.saveProjectId(accountId, mockId);
+      // Resolve project ID if missing (Discovery Real PhD Level)
+      if (!tokenData.project_id && (tokenData.provider === 'google' || tokenData.provider === 'anthropic')) {
+        this.logger.log(`Project ID missing for ${tokenData.email}, initiating discovery...`);
+        try {
+            const realId = await GoogleAPIService.fetchProjectId(tokenData.access_token);
+            if (realId) {
+                tokenData.project_id = realId;
+                await this.saveProjectId(accountId, realId);
+            } else {
+                // Persistent Fallback if discovery fails (Safe but marked)
+                tokenData.project_id = `cloud-code-${tokenData.email.split('@')[0]}`;
+            }
+        } catch (e) {
+            this.logger.warn(`Failed real discovery for ${tokenData.email}, using identifier-based ID`);
+            tokenData.project_id = `cloud-code-${tokenData.email.split('@')[0]}`;
+        }
       }
 
       this.logger.log(`Selected account: ${tokenData.email}`);
@@ -132,6 +180,7 @@ export class TokenManagerService implements OnModuleInit {
       return {
         id: accountId,
         email: tokenData.email,
+        provider: tokenData.provider,
         token: {
           access_token: tokenData.access_token,
           refresh_token: tokenData.refresh_token,

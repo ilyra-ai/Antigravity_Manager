@@ -3,18 +3,299 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
 i18n
-  .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    fallbackLng: 'en',
-    detection: {
-      order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
-      lookupLocalStorage: 'lang',
-    },
-    supportedLngs: ['en', 'zh-CN'],
+    lng: 'pt-BR',
+    fallbackLng: 'pt-BR',
+    supportedLngs: ['pt-BR', 'en', 'zh-CN'],
     load: 'currentOnly', // Only load the exact language code, not variants
     resources: {
+      'pt-BR': {
+        translation: {
+          appName: 'Antigravity Manager',
+          status: {
+            checking: 'Verificando status...',
+            running: 'Antigravity está rodando em segundo plano',
+            stopped: 'Serviço Antigravity parado',
+          },
+          action: {
+            stop: 'Parar',
+            start: 'Iniciar',
+            switch: 'Trocar',
+            deleteBackup: 'Excluir Backup',
+            backupCurrent: 'Backup Atual',
+            retry: 'Repetir',
+            openLogs: 'Abrir Pasta de Logs',
+          },
+          error: {
+            generic: 'Ocorreu um erro inesperado.',
+            keychainUnavailable: 'Keychain indisponível.',
+            keychainHint: {
+              translocation:
+                'Detectada Translocação de App macOS. Mova o app para /Applications e abra novamente.',
+              keychainDenied:
+                'Acesso ao Keychain negado. O app pode não estar assinado; veja o README para contornar.',
+              signNotarize: 'Por favor, use uma build assinada e autenticada quando disponível.',
+            },
+          },
+          nav: {
+            accounts: 'Contas',
+            proxy: 'Proxy de API',
+            local: 'IA Local',
+            settings: 'Configurações',
+          },
+          account: {
+            current: 'Atual',
+            lastUsed: 'Último uso {{time}}',
+          },
+          home: {
+            title: 'Contas',
+            description: 'Gerencie suas contas Google Gemini do Antigravity.',
+            noBackups: {
+              title: 'Nenhum backup encontrado',
+              description: 'Crie um backup da sua conta Antigravity atual para começar.',
+              action: 'Fazer Backup da Conta Atual',
+            },
+          },
+          settings: {
+            title: 'Configurações',
+            description: 'Gerenciar preferências do aplicativo.',
+            general: 'Geral',
+            connection: 'Conexão',
+            models: 'Modelos',
+            appearance: {
+              title: 'Aparência',
+              description: 'Personalize como o Antigravity Manager aparece no seu dispositivo.',
+            },
+            darkMode: 'Modo Escuro',
+            darkModeDescription: 'Ativar modo escuro para melhor visualização noturna.',
+            language: {
+              title: 'Idioma',
+              description: 'Selecione seu idioma de preferência.',
+              english: 'Inglês',
+              chinese: 'Chinês (Simplificado)',
+              portuguese: 'Português (Brasil)',
+            },
+            about: {
+              title: 'Sobre',
+              description: 'Informações do aplicativo.',
+            },
+            version: 'Versão',
+            platform: 'Plataforma',
+            license: 'Licença',
+            openLogDir: 'Abrir',
+            account: {
+              title: 'Configurações de Conta',
+              description: 'Configure a atualização e sincronização automática de contas.',
+              auto_refresh: 'Atualizar Cota Automaticamente',
+              auto_refresh_desc: 'Atualizar periodicamente as informações de cota de todas as contas',
+              auto_sync: 'Sincronizar Conta Atual Automaticamente',
+              auto_sync_desc: 'Sincronizar periodicamente as informações da conta ativa',
+            },
+            proxy: {
+              title: 'Proxy de Saída',
+              description: 'Configure um proxy para requisições externas para as APIs Google/Gemini.',
+              enable: 'Habilitar Proxy de Saída',
+              url: 'URL do Proxy',
+              timeout: 'Tempo Limite da Requisição (segundos)',
+            },
+            modelMapping: {
+              title: 'Mapeamento de Modelos',
+              description:
+                'Mapeie modelos do Claude Code para modelos Antigravity. Otimize custo e velocidade roteando requisições de forma inteligente.',
+              claudeKeyword: 'Modelo Claude',
+              targetGemini: 'Modelo Gemini de Destino',
+              addPlaceholderKey: '',
+              addPlaceholderValue: '',
+              noMappings: 'Nenhum mapeamento personalizado definido.',
+              mapsTo: 'Mapeia para',
+              default: 'Padrão',
+              restoreDefaults: 'Restaurar Padrões',
+            },
+
+            examples: {
+              title: 'Exemplos de Uso',
+              description: 'Comandos de exemplo para chamar o proxy de API local.',
+              curl: 'cURL',
+              python: 'Python',
+              copy: 'Copiar',
+              copied: 'Copiado!',
+              openai_protocol: 'Protocolo OpenAI',
+              anthropic_protocol: 'Protocolo Anthropic',
+              openai_tools: 'Cursor, Windsurf, NextChat',
+              anthropic_tools: 'Claude Code CLI',
+              flash: 'Rápido',
+              pro: 'Pro',
+              flash_preview: 'Preview',
+              pro_high: 'Melhor',
+              sonnet: 'Thinking',
+              opus: 'Opus',
+            },
+            gateway: {
+              title: 'Serviço de Proxy de API',
+              description: 'Controle o servidor de proxy de API local.',
+              status_running: 'Rodando',
+              status_stopped: 'Parado',
+              action_start: 'Iniciar Serviço',
+              action_stop: 'Parar Serviço',
+              accounts_info: '{{count}} contas disponíveis',
+              port: 'Porta de Escuta',
+              port_hint: 'Requer reinicialização para aplicar alterações',
+              timeout: 'Tempo Limite da Requisição',
+              timeout_hint: 'Intervalo permitido: 30-600s',
+              api_key: 'Chave de API',
+              regenerate_key: 'Regerar',
+              regenerateConfirm: {
+                title: 'Regerar Chave de API?',
+                description:
+                  'Isso invalidará a chave de API atual imediatamente. Qualquer aplicativo usando a chave antiga parará de funcionar.',
+                cancel: 'Cancelar',
+                confirm: 'Regerar',
+              },
+              key_warning: 'Mantenha sua chave de API segura. Não a compartilhe.',
+              auto_start: 'Iniciar com o App',
+              auto_start_desc: 'Iniciar o serviço de proxy quando o aplicativo for lançado',
+            },
+            proxy_tab: 'Proxy',
+            save: 'Salvar Configurações',
+          },
+          toast: {
+            backupSuccess: {
+              title: 'Sucesso',
+              description: 'Backup da conta criado com sucesso.',
+            },
+            backupError: {
+              title: 'Erro',
+              description: 'Falha ao criar backup: {{error}}',
+            },
+            switchSuccess: {
+              title: 'Sucesso',
+              description: 'Conta alterada com sucesso.',
+            },
+            switchError: {
+              title: 'Erro',
+              description: 'Falha ao alterar conta: {{error}}',
+            },
+            deleteSuccess: {
+              title: 'Sucesso',
+              description: 'Backup da conta excluído com sucesso.',
+            },
+            deleteError: {
+              title: 'Erro',
+              description: 'Falha ao excluir backup: {{error}}',
+            },
+          },
+          cloud: {
+            title: 'Contas',
+            description: 'Gerencie seu pool de contas Google Gemini.',
+            autoSwitch: 'Troca Automática',
+            addAccount: 'Adicionar Conta',
+            syncFromIDE: 'Sincronizar da IDE',
+            checkQuota: 'Verificar Cota Agora',
+            polling: 'Varredura acionada',
+            authDialog: {
+              title: 'Adicionar Conta Google',
+              description: 'Para adicionar uma conta, você precisa autorizar o aplicativo.',
+              openLogin: 'Abrir Página de Login',
+              authCode: 'Código de Autorização',
+              placeholder: '',
+              instruction:
+                'O navegador padrão será aberto para autenticação no Google. Insira o código obtido abaixo.',
+              verify: 'Verificar e Adicionar',
+            },
+            card: {
+              active: 'Ativa',
+              use: 'Usar',
+              rateLimited: 'Com Rate Limit',
+              left: 'restante',
+              used: 'Usado',
+              unknown: 'Usuário Desconhecido',
+              actions: 'Ações',
+              useAccount: 'Usar Conta',
+              refresh: 'Atualizar Cota',
+              delete: 'Excluir Conta',
+              noQuota: 'Sem dados de cota',
+            },
+            list: {
+              noAccounts: 'Nenhuma conta em nuvem adicionada.',
+            },
+            toast: {
+              syncSuccess: {
+                title: 'Sincronização com Sucesso',
+                description: 'Importado {{email}} da IDE.',
+              },
+              syncFailed: {
+                title: 'Falha na Sincronização',
+                description: 'Nenhuma conta ativa encontrada no banco de dados da IDE.',
+              },
+              addSuccess: 'Conta adicionada com sucesso!',
+              addFailed: {
+                title: 'Falha ao adicionar conta',
+              },
+              quotaRefreshed: 'Cota atualizada',
+              refreshFailed: 'Falha ao atualizar cota',
+              switched: {
+                title: 'Conta trocada!',
+                description: 'Reiniciando o Antigravity...',
+              },
+              switchFailed: 'Falha ao trocar conta',
+              deleted: 'Conta excluída',
+              deleteFailed: 'Falha ao excluir conta',
+              deleteConfirm: 'Tem certeza que deseja excluir esta conta?',
+              autoSwitchOn: 'Troca Automática Ativada',
+              autoSwitchOff: 'Troca Automática Desativada',
+              updateSettingsFailed: 'Falha ao atualizar configurações',
+            },
+            batch: {
+              selected: '{{count}} selecionada(s)',
+              delete: 'Excluir Selecionadas',
+              refresh: 'Atualizar Selecionadas',
+              selectAll: 'Selecionar Tudo',
+              clear: 'Limpar Seleção',
+              confirmDelete: 'Tem certeza que deseja excluir {{count}} contas?',
+            },
+          },
+          proxy: {
+            title: 'Proxy de API',
+            description: 'Gerenciar o serviço de proxy de API local.',
+            save: 'Salvar Configurações',
+            copy: 'Copiar',
+            regenerate: 'Regerar',
+            regenerateConfirm: {
+              title: 'Regerar Chave de API?',
+              description:
+                'Isso invalidará a chave de API atual imediatamente. Qualquer aplicativo usando a chave antiga parará de funcionar.',
+              cancel: 'Cancelar',
+              confirm: 'Regerar',
+            },
+            service: {
+              title: 'Status do Serviço',
+              description: 'Controle o servidor de proxy de API local.',
+              running: 'Rodando',
+              stopped: 'Parado',
+              start: 'Iniciar Serviço',
+              stop: 'Parar Serviço',
+            },
+            config: {
+              port: 'Porta de Escuta',
+              timeout: 'Tempo Limite da Requisição',
+              api_key: 'Chave de API',
+              auto_start: 'Iniciar com o App',
+              auto_start_desc: 'Iniciar o serviço de proxy quando o aplicativo for lançado',
+            },
+            mapping: {
+              title: 'Mapeamento de Modelos',
+              description: 'Mapeie modelos Claude para modelos Gemini para roteamento.',
+              maps_to: 'Mapeia para',
+              restore: 'Restaurar Padrões',
+            },
+            examples: {
+              title: 'Exemplos de Uso',
+              description: 'Comandos de exemplo para chamar o proxy de API local.',
+            },
+          },
+        },
+      },
       en: {
         translation: {
           appName: 'Antigravity Manager',
@@ -46,6 +327,7 @@ i18n
           nav: {
             accounts: 'Accounts',
             proxy: 'API Proxy',
+            local: 'Local AI',
             settings: 'Settings',
           },
           account: {

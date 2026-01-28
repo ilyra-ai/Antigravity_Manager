@@ -11,6 +11,7 @@ import { logger } from './utils/logger';
 import { CloudAccountRepo } from './ipc/database/cloudHandler';
 import { initDatabase } from './ipc/database/handler';
 import { CloudMonitorService } from './services/CloudMonitorService';
+import { LocalModelDiscoveryService } from './ipc/cloud/local-discovery';
 
 // Static Imports to fix Bundle Resolution Errors
 import { AuthServer } from './ipc/cloud/authServer';
@@ -49,7 +50,7 @@ function logPacket(data: any) {
     }
   }
 }
-ipcMain.on(IPC_CHANNELS.CHANGE_LANGUAGE, (event, lang) => {
+ipcMain.on(IPC_CHANNELS.CHANGE_LANGUAGE, (event: Electron.IpcMainEvent, lang: string) => {
   logger.info(`IPC: Received CHANGE_LANGUAGE: ${lang}`);
   setTrayLanguage(lang);
 });
@@ -88,7 +89,7 @@ function createWindow() {
     webPreferences: {
       devTools: inDevelopment,
       contextIsolation: true,
-      nodeIntegration: true,
+      nodeIntegration: false,
       nodeIntegrationInSubFrames: false,
       preload: preload,
     },
@@ -114,7 +115,7 @@ function createWindow() {
 
   logger.info('Window created');
 
-  mainWindow.on('close', (event) => {
+  mainWindow.on('close', (event: Electron.Event) => {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
@@ -128,11 +129,11 @@ function createWindow() {
     logger.info('Window closed event triggered');
   });
 
-  mainWindow.webContents.on('render-process-gone', (event, details) => {
+  mainWindow.webContents.on('render-process-gone', (event: Electron.Event, details: Electron.RenderProcessGoneDetails) => {
     logger.error('Renderer process gone:', details);
   });
 
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+  mainWindow.webContents.on('did-fail-load', (event: Electron.Event, errorCode: number, errorDescription: string, validatedURL: string) => {
     logger.error(`Page failed to load: ${errorCode} - ${errorDescription} - URL: ${validatedURL}`);
   });
 
@@ -140,13 +141,12 @@ function createWindow() {
     logger.info('Page finished loading successfully');
   });
 
-  mainWindow.webContents.on('console-message', (details) => {
-    const { level, message, lineNumber, sourceId } = details;
-    logger.info(`[Renderer Console][${level}] ${message} (${sourceId}:${lineNumber})`);
+  mainWindow.webContents.on('console-message', (event: any, level: number, message: string, line: number, sourceId: string) => {
+    logger.info(`[Renderer Console][${level}] ${message} (${sourceId}:${line})`);
   });
 }
 
-app.on('child-process-gone', (event, details) => {
+app.on('child-process-gone', (event: Electron.Event, details: Electron.Details) => {
   logger.error('Child process gone:', details);
 });
 
@@ -155,7 +155,7 @@ app.on('before-quit', () => {
   logger.info('App before-quit event triggered - isQuitting set to true');
 });
 
-app.on('will-quit', (event) => {
+app.on('will-quit', (event: Electron.Event) => {
   logger.info('App will quit event triggered');
   try {
     destroyTray();
@@ -164,7 +164,7 @@ app.on('will-quit', (event) => {
   }
 });
 
-app.on('quit', (event, exitCode) => {
+app.on('quit', (event: Electron.Event, exitCode: number) => {
   logger.info(`App quit event triggered with code: ${exitCode}`);
 });
 
@@ -188,12 +188,12 @@ function checkForUpdates() {
 }
 
 async function setupORPC() {
-  ipcMain.on(IPC_CHANNELS.START_ORPC_SERVER, (event) => {
+  ipcMain.on(IPC_CHANNELS.START_ORPC_SERVER, (event: Electron.IpcMainEvent) => {
     logger.info('IPC: Received START_ORPC_SERVER');
     const [port] = event.ports;
 
     // Debug: Inspect raw messages
-    port.on('message', (msgEvent) => {
+    port.on('message', (msgEvent: Electron.MessageEvent) => {
       try {
         const data = msgEvent.data;
 
@@ -214,7 +214,7 @@ async function setupORPC() {
   });
 }
 
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', (error: Error) => {
   logger.error('Uncaught Exception:', error);
 });
 
@@ -236,6 +236,13 @@ app
 
     logger.info('Step: Initialize Antigravity DB (WAL Mode)');
     initDatabase();
+
+    // PhD Level: Industrial Sovereignty Auto-Discovery
+    // Trigger local model discovery on startup to ensure presence regardless of previous sessions
+    logger.info('Step: Auto-Discovering Local HW (Ollama/LMStudio)');
+    LocalModelDiscoveryService.syncLocalModels().catch(e => 
+      logger.error('Startup: Local discovery failed', e)
+    );
   })
   .then(() => {
     logger.info('Step: setupORPC');

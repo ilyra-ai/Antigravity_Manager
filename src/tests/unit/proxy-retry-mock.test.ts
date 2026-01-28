@@ -6,11 +6,12 @@ import { Observable } from 'rxjs';
 // Mock dependencies
 const mockTokenManager = { getNextToken: vi.fn(), markAsRateLimited: vi.fn() };
 const mockGeminiClient = { streamGenerateInternal: vi.fn(), generateInternal: vi.fn() };
+const mockLocalAIClient = { streamChat: vi.fn(), generateChat: vi.fn(), getModels: vi.fn() };
 
 // Subclass to access private method
 class TestableProxyService extends ProxyService {
   constructor() {
-    super(mockTokenManager as any, mockGeminiClient as any);
+    super(mockTokenManager as any, mockGeminiClient as any, mockLocalAIClient as any);
   }
 
   public testProcessStream(stream: any, model: string = 'model'): Observable<string> {

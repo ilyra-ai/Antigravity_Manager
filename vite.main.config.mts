@@ -19,7 +19,7 @@ export default defineConfig({
   build: {
     sourcemap: true,
     rollupOptions: {
-      external: ['better-sqlite3', 'keytar'],
+      external: ['better-sqlite3', 'keytar', 'bufferutil', 'utf-8-validate'],
     },
   },
 });

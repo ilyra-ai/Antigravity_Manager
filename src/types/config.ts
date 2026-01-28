@@ -15,6 +15,16 @@ export const ProxyConfigSchema = z.object({
   upstream_proxy: UpstreamProxyConfigSchema,
 });
 
+export const LocalAIEndpointSchema = z.object({
+    url: z.string(),
+    enabled: z.boolean().default(true)
+});
+
+export const LocalAISettingsSchema = z.object({
+    ollama: LocalAIEndpointSchema,
+    lmstudio: LocalAIEndpointSchema
+});
+
 export const AppConfigSchema = z.object({
   language: z.string(),
   theme: z.string(),
@@ -24,6 +34,7 @@ export const AppConfigSchema = z.object({
   sync_interval: z.number(), // minutes
   default_export_path: z.string().nullable().optional(), // 导出路径
   proxy: ProxyConfigSchema,
+  local_ai: LocalAISettingsSchema
 });
 
 export type UpstreamProxyConfig = z.infer<typeof UpstreamProxyConfigSchema>;
@@ -50,4 +61,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       url: '',
     },
   },
+  local_ai: {
+    ollama: { url: 'http://localhost:11434/v1', enabled: true },
+    lmstudio: { url: 'http://localhost:1234/v1', enabled: true }
+  }
 };

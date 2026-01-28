@@ -12,7 +12,7 @@ export class AuthServer {
       return;
     }
 
-    this.server = http.createServer((req, res) => {
+    this.server = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
       const url = new URL(req.url || '', `http://localhost:${this.PORT}`);
 
       if (url.pathname === '/oauth-callback') {
@@ -64,11 +64,11 @@ export class AuthServer {
       }
     });
 
-    this.server.on('error', (err) => {
+    this.server.on('error', (err: Error) => {
       logger.error('AuthServer: Server error', err);
     });
 
-    this.server.listen(this.PORT, () => {
+    this.server.listen(this.PORT, '127.0.0.1', () => {
       logger.info(`AuthServer: Listening on http://localhost:${this.PORT}`);
     });
   }

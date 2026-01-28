@@ -1,0 +1,10 @@
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@swc/core'
+  - better-sqlite3
+  - electron
+  - electron-winstaller
+  - esbuild
+  - keytar
+  - protobufjs
+  - sharp

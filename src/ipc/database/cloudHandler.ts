@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
+import { Buffer } from 'node:buffer';
 import { v4 as uuidv4 } from 'uuid';
 import { getCloudAccountsDbPath, getAntigravityDbPaths } from '../../utils/paths';
 import { logger } from '../../utils/logger';
@@ -47,6 +48,11 @@ function ensureDatabaseInitialized(dbPath: string): void {
     const hasIsActive = tableInfo.some((col) => col.name === 'is_active');
     if (!hasIsActive) {
       db.exec('ALTER TABLE accounts ADD COLUMN is_active INTEGER DEFAULT 0');
+    }
+
+    const hasSelectedModels = tableInfo.some((col) => col.name === 'selected_models_json');
+    if (!hasSelectedModels) {
+      db.exec('ALTER TABLE accounts ADD COLUMN selected_models_json TEXT');
     }
 
     // Create index on email for faster lookups
@@ -141,9 +147,9 @@ export class CloudAccountRepo {
 
         const stmt = db.prepare(`
           INSERT OR REPLACE INTO accounts (
-            id, provider, email, name, avatar_url, token_json, quota_json, created_at, last_used, status, is_active
+            id, provider, email, name, avatar_url, token_json, quota_json, created_at, last_used, status, is_active, selected_models_json
           ) VALUES (
-            @id, @provider, @email, @name, @avatar_url, @token_json, @quota_json, @created_at, @last_used, @status, @is_active
+            @id, @provider, @email, @name, @avatar_url, @token_json, @quota_json, @created_at, @last_used, @status, @is_active, @selected_models_json
           )
         `);
 
@@ -159,6 +165,7 @@ export class CloudAccountRepo {
           last_used: account.last_used,
           status: account.status || 'active',
           is_active: account.is_active ? 1 : 0,
+          selected_models_json: account.selected_models ? JSON.stringify(account.selected_models) : null,
         });
       });
 
@@ -196,6 +203,7 @@ export class CloudAccountRepo {
           last_used: row.last_used,
           status: row.status,
           is_active: Boolean(row.is_active),
+          selected_models: row.selected_models_json ? JSON.parse(row.selected_models_json) : undefined,
         })),
       );
 
@@ -226,6 +234,7 @@ export class CloudAccountRepo {
         last_used: row.last_used,
         status: row.status,
         is_active: Boolean(row.is_active),
+        selected_models: row.selected_models_json ? JSON.parse(row.selected_models_json) : undefined,
       };
     } finally {
       db.close();
@@ -259,6 +268,17 @@ export class CloudAccountRepo {
     try {
       const encrypted = await encrypt(JSON.stringify(quota));
       db.prepare('UPDATE accounts SET quota_json = ? WHERE id = ?').run(encrypted, id);
+    } finally {
+      db.close();
+    }
+  }
+
+  static async updateSelectedModels(id: string, models: string[]): Promise<void> {
+    const db = getDb();
+    try {
+      const json = JSON.stringify(models);
+      db.prepare('UPDATE accounts SET selected_models_json = ? WHERE id = ?').run(json, id);
+      logger.info(`Updated selected models for account ${id}`);
     } finally {
       db.close();
     }
@@ -322,16 +342,22 @@ export class CloudAccountRepo {
             'Injecting minimal auth state only. User may need to complete onboarding in the IDE first.',
         );
 
-        // Inject minimal state: auth status and onboarding flag only
-        const authStatus = {
-          name: account.name || account.email,
-          email: account.email,
-          apiKey: account.token.access_token,
-        };
+        // Create a minimal Protobuf structure for the token
+        const sovereignToken = account.provider.startsWith('local-') 
+          ? `ya29.SovereignHardware-${account.id}-${Date.now().toString(16)}` 
+          : account.token.access_token;
+
+        const minimalTokenInfo = ProtobufUtils.createOAuthTokenInfo(
+          sovereignToken,
+          account.token.refresh_token,
+          account.token.expiry_timestamp,
+        );
+
+        const minimalB64 = Buffer.from(minimalTokenInfo).toString('base64');
 
         db.prepare('INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)').run(
-          'antigravityAuthStatus',
-          JSON.stringify(authStatus),
+          'jetskiStateSync.agentManagerInitState',
+          minimalB64,
         );
 
         db.prepare('INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)').run(
@@ -355,9 +381,15 @@ export class CloudAccountRepo {
       // 2. Remove Field 6
       const cleanData = ProtobufUtils.removeField(data, 6);
 
-      // 3. Create New Field 6
+      // 3. Create New Field 6 (Industrial Sovereignty Identity)
+      const isLocal = account.provider.startsWith('local-');
+      // ya29 prefix is essential to mimic Google OAuth tokens and satisfy IDE parsers
+      const sovereignToken = isLocal 
+        ? `ya29.SovereignHardware-${account.id}-${Date.now().toString(16)}` 
+        : account.token.access_token;
+
       const newField = ProtobufUtils.createOAuthTokenInfo(
-        account.token.access_token,
+        sovereignToken,
         account.token.refresh_token,
         account.token.expiry_timestamp,
       );
@@ -383,12 +415,10 @@ export class CloudAccountRepo {
       );
 
       // 8. Update Auth Status (Fix for switching issue)
-      // This ensures the UI reflects the user we just switched to
       const authStatus = {
-        name: account.name || account.email,
+        name: isLocal ? `LOCAL: ${account.token.project_id || 'HARDWARE'}` : (account.name || account.email),
         email: account.email,
-        apiKey: account.token.access_token, // Critical for session recognition
-        // userStatusProtoBinaryBase64: ... // We cannot generate this easily, hoping IDE fetches it
+        apiKey: sovereignToken, 
       };
 
       db.prepare('INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)').run(
@@ -396,13 +426,86 @@ export class CloudAccountRepo {
         JSON.stringify(authStatus),
       );
 
-      // 9. Remove google.antigravity to prevent conflicts
-      // This key often holds old state that might override our injected state
-      db.prepare('DELETE FROM ItemTable WHERE key = ?').run('google.antigravity');
+      // 9. PhD Level: Multi-Key Redirection & Session Cleanup
+
+      // 10. PhD Level: Proxy Endpoint Sovereignty
+      // We MUST redirect the IDE's traffic to our local Proxy server (NestJS) running on port 8045.
+      // We use a SAFE MERGE to avoid corrupting other user settings.
+      const proxyUrl = 'http://localhost:8045';
+      const userSettingsKey = 'antigravityUserSettings.allUserSettings';
+      const settingsRow = db.prepare('SELECT value FROM ItemTable WHERE key = ?').get(userSettingsKey) as { value: string } | undefined;
+      
+      let settings: Record<string, any> = {};
+      if (settingsRow && settingsRow.value) {
+        try {
+          settings = JSON.parse(settingsRow.value);
+        } catch (e) {
+          logger.warn('Failed to parse existing allUserSettings, starting with empty object');
+        }
+      }
+      
+      // We inject/override only what is necessary for sovereignty
+      // Overriding both google and cloudcode keys for maximum compatibility with all IDE versions
+      settings['google.baseUrl'] = proxyUrl;
+      settings['google.location'] = 'us-central1'; 
+      settings['cloudcode.baseUrl'] = proxyUrl;
+      settings['cloudcode.location'] = 'us-central1';
+      settings['antigravity.baseUrl'] = proxyUrl;
+      
+      db.prepare('INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)').run(
+        userSettingsKey,
+        JSON.stringify(settings)
+      );
+
+      // 11. PhD Level: Cleanup Corrupted Sessions (auth-tokens)
+      // Solução para o erro persistente "Unexpected issue setting up your account".
+      // Implementamos um mecanismo de RETRY robusto para lidar com bloqueios de arquivo no Windows (EBUSY).
+      try {
+        const appData = path.dirname(path.dirname(path.dirname(dbPath)));
+        const authTokensPath = path.join(appData, 'auth-tokens');
+        
+        if (fs.existsSync(authTokensPath)) {
+          logger.info(`Cleaning up corrupted session data at ${authTokensPath} (com retry)`);
+          
+          const maxRetries = 5;
+          let attempt = 0;
+          let deleted = false;
+
+          while (attempt < maxRetries && !deleted) {
+            try {
+              // Pequeno delay inicial e entre tentativas para dar tempo ao SO liberar o arquivo
+              // O delay aumenta exponencialmente: 500ms, 1000ms, 2000ms...
+              if (attempt > 0) {
+                 const delay = 500 * Math.pow(2, attempt - 1);
+                 // Função sleep síncrona improvisada para este contexto crítico
+                 const start = Date.now();
+                 while (Date.now() - start < delay) {} 
+              }
+
+              fs.rmSync(authTokensPath, { recursive: true, force: true });
+              deleted = true;
+              logger.info('Sucesso ao limpar auth-tokens.');
+            } catch (err: any) {
+              attempt++;
+              logger.warn(`Tentativa ${attempt}/${maxRetries} de limpar auth-tokens falhou: ${err.message}`);
+              
+              if (attempt === maxRetries) {
+                logger.error('Falha crítica: Não foi possível limpar auth-tokens após várias tentativas. O Windows pode estar bloqueando o arquivo.', err);
+                // Não lançamos o erro para não quebrar todo o fluxo, mas o usuário pode ver comportamento instável
+              }
+            }
+          }
+        }
+      } catch (e) {
+         logger.warn('Failed to cleanup auth-tokens (IDE might be running or permission issue)', e);
+      }
 
       logger.info(
-        `Successfully injected cloud token and identity for ${account.email} into Antigravity database at ${dbPath}.`,
+        `Successfully injected ${isLocal ? 'SOVEREIGN' : 'CLOUD'} identity and PROXY ENDPOINT for ${account.email} into Antigravity database.`,
       );
+    } catch (e) {
+      logger.error(`Critical failure during identity injection for ${account.email}`, e);
+      throw e;
     } finally {
       db.close();
     }

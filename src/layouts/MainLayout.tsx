@@ -21,6 +21,11 @@ export const MainLayout: React.FC = () => {
       label: t('nav.proxy', 'API Proxy'),
     },
     {
+      to: '/local',
+      icon: Rocket,
+      label: t('nav.local', 'IA Local'),
+    },
+    {
       to: '/settings',
       icon: Settings,
       label: t('nav.settings'),

@@ -118,6 +118,7 @@ function SettingsPage() {
                     <SelectValue placeholder={t('settings.language.title')} />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="pt-BR">{t('settings.language.portuguese')}</SelectItem>
                     <SelectItem value="en">{t('settings.language.english')}</SelectItem>
                     <SelectItem value="zh-CN">{t('settings.language.chinese')}</SelectItem>
                   </SelectContent>
@@ -235,7 +236,6 @@ function SettingsPage() {
                 <Label htmlFor="upstream-proxy-url">{t('settings.proxy.url')}</Label>
                 <Input
                   id="upstream-proxy-url"
-                  placeholder="http://127.0.0.1:7890"
                   value={proxyConfig.upstream_proxy.url}
                   onChange={(e) =>
                     updateProxyConfig({

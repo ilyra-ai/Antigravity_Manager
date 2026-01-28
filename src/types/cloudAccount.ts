@@ -23,7 +23,7 @@ export interface CloudQuotaData {
 
 export interface CloudAccount {
   id: string; // UUID
-  provider: 'google' | 'anthropic';
+  provider: 'google' | 'anthropic' | 'local-ollama' | 'local-lmstudio';
   email: string;
   name?: string | null;
   avatar_url?: string | null;
@@ -33,6 +33,7 @@ export interface CloudAccount {
   last_used: number; // Unix timestamp
   status?: 'active' | 'rate_limited' | 'expired';
   is_active?: boolean;
+  selected_models?: string[];
 }
 
 // Zod Schemas
@@ -59,7 +60,7 @@ export const CloudQuotaDataSchema = z.object({
 
 export const CloudAccountSchema = z.object({
   id: z.string(),
-  provider: z.enum(['google', 'anthropic']),
+  provider: z.enum(['google', 'anthropic', 'local-ollama', 'local-lmstudio']),
   email: z.string(), // Relaxed: was z.string().email() but caused validation issues with some formats
   name: z.string().optional().nullable(),
   avatar_url: z.string().optional().nullable(),
@@ -69,4 +70,5 @@ export const CloudAccountSchema = z.object({
   last_used: z.number(),
   status: z.enum(['active', 'rate_limited', 'expired']).optional(),
   is_active: z.boolean().optional(),
+  selected_models: z.array(z.string()).optional(),
 });

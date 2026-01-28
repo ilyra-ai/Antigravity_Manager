@@ -39,3 +39,11 @@ export function syncLocalAccount() {
 export function startAuthFlow() {
   return ipc.client.cloud.startAuthFlow();
 }
+
+export function syncLocalModels() {
+  return ipc.client.cloud.syncLocalModels();
+}
+
+export function updateSelectedModels(input: { accountId: string; models: string[] }) {
+  return ipc.client.cloud.updateSelectedModels(input);
+}

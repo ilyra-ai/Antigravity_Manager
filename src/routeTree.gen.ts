@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProxyRouteImport } from './routes/proxy'
+import { Route as LocalRouteImport } from './routes/local'
 import { Route as IndexRouteImport } from './routes/index'
 
 const SettingsRoute = SettingsRouteImport.update({
@@ -23,6 +24,11 @@ const ProxyRoute = ProxyRouteImport.update({
   path: '/proxy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LocalRoute = LocalRouteImport.update({
+  id: '/local',
+  path: '/local',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,30 +37,34 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/local': typeof LocalRoute
   '/proxy': typeof ProxyRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/local': typeof LocalRoute
   '/proxy': typeof ProxyRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/local': typeof LocalRoute
   '/proxy': typeof ProxyRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/proxy' | '/settings'
+  fullPaths: '/' | '/local' | '/proxy' | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/proxy' | '/settings'
-  id: '__root__' | '/' | '/proxy' | '/settings'
+  to: '/' | '/local' | '/proxy' | '/settings'
+  id: '__root__' | '/' | '/local' | '/proxy' | '/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LocalRoute: typeof LocalRoute
   ProxyRoute: typeof ProxyRoute
   SettingsRoute: typeof SettingsRoute
 }
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProxyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/local': {
+      id: '/local'
+      path: '/local'
+      fullPath: '/local'
+      preLoaderRoute: typeof LocalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LocalRoute: LocalRoute,
   ProxyRoute: ProxyRoute,
   SettingsRoute: SettingsRoute,
 }
