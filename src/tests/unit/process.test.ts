@@ -170,6 +170,26 @@ describe('Process Handler', () => {
       const result = await isProcessRunning();
       expect(result).toBe(false);
     });
+
+    it('should return true when Antigravity.exe is found in WSL', async () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+      Object.defineProperty(process, 'pid', { value: 1000, configurable: true });
+
+      const { isWsl } = await import('../../utils/paths');
+      (isWsl as any).mockReturnValue(true);
+
+      // No WSL, isProcessRunning chama find-process para nomes específicos
+      mockFindProcess.mockResolvedValue([
+        {
+          pid: 5432,
+          name: 'Antigravity.exe',
+          cmd: 'Antigravity.exe',
+        },
+      ]);
+
+      const result = await isProcessRunning();
+      expect(result).toBe(true);
+    });
   });
 
   describe('Module exports', () => {
