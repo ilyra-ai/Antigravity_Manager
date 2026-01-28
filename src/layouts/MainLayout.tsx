@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils';
 import { StatusBar } from '@/components/StatusBar';
 import { LayoutDashboard, Settings, Network, Rocket } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { motion, AnimatePresence } from 'framer-motion';
 
 export const MainLayout: React.FC = () => {
   const location = useLocation();
@@ -66,18 +65,9 @@ export const MainLayout: React.FC = () => {
 
         {/* Content Area */}
         <main className="flex-1 overflow-auto bg-background/50 relative">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="h-full"
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          <div className="h-full">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

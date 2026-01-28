@@ -13,17 +13,25 @@ import { setServerConfig } from './server-config';
 let app: NestFastifyApplication | null = null;
 let currentPort: number = 0;
 
-export async function bootstrapNestServer(config: any): Promise<boolean> {
+export async function bootstrapNestServer(config: ProxyConfig): Promise<boolean> {
   const port = config.port || 8045;
+  
+  // PhD Level: Deterministic Lifecycle Management
+  // Ensure any previous instance is completely purged before starting a new one
   if (app) {
-    logger.info('NestJS server already running.');
-    return true;
+    logger.warn('NestJS server already exists. Attempting to restart...');
+    const stopped = await stopNestServer();
+    if (!stopped) {
+      logger.error('Failed to purge existing NestJS instance. Aborting bootstrap to prevent route conflicts.');
+      return false;
+    }
   }
 
   setServerConfig(config);
 
   try {
-    app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
+    const adapter = new FastifyAdapter();
+    app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
       logger: ['error', 'warn', 'log'],
     });
 
@@ -38,8 +46,9 @@ export async function bootstrapNestServer(config: any): Promise<boolean> {
     currentPort = port;
     logger.info(`NestJS Proxy Server running on http://localhost:${port}`);
     return true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to start NestJS server', error);
+    app = null; // Reset on failure
     return false;
   }
 }
@@ -47,13 +56,23 @@ export async function bootstrapNestServer(config: any): Promise<boolean> {
 export async function stopNestServer(): Promise<boolean> {
   if (app) {
     try {
+      logger.info('Stopping NestJS server...');
+      
+      // PhD Level: Graceful but Absolute Shutdown
+      // 1. Close the Nest application
       await app.close();
+      
+      // 2. Explicitly nullify references to allow GC and prevent route leaks
       app = null;
       currentPort = 0;
-      logger.info('NestJS server stopped.');
+      
+      logger.info('NestJS server stopped successfully.');
       return true;
-    } catch (e) {
-      logger.error('Failed to stop NestJS server', e);
+    } catch (error: unknown) {
+      logger.error('Failed to stop NestJS server gracefully', error);
+      // Force cleanup even on error
+      app = null;
+      currentPort = 0;
       return false;
     }
   }
@@ -77,7 +96,7 @@ export async function getNestServerStatus(): Promise<{
     try {
       const tokenManager = app.get(TokenManagerService);
       activeAccounts = tokenManager.getAccountCount();
-    } catch (e) {
+    } catch (error: unknown) {
       // TokenManager might not be available
     }
   }
